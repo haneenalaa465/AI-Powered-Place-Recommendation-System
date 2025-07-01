@@ -8,13 +8,13 @@ class PreferenceEmbedder:
     Manages the generation of contextual embeddings for predefined attributes
     and calculates the similarity of review texts to these attributes.
     """
-    def __init__(self, model_name: str = 'google-bert/bert-base-multilingual-cased'): # Changed model to mBART
+    def __init__(self, model_name: str = 'google-bert/bert-base-multilingual-cased'): 
         """
         Initializes the SentenceTransformer model.
 
         Args:
             model_name (str): The name of the pre-trained SentenceTransformer model to use.
-                              'facebook/mbart-large-cc25' is a multilingual mBART model.
+                              'google-bert/bert-base-multilingual-cased' is a multilingual mBART model.
         """
         print(f"Loading SentenceTransformer model: {model_name}...")
         self.model = SentenceTransformer(model_name)
