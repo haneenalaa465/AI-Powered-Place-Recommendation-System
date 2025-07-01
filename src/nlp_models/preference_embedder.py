@@ -87,7 +87,7 @@ if __name__ == "__main__":
     ]
 
     # Initialize the embedder with the mBART model
-    embedder = PreferenceEmbedder(model_name='facebook/mbart-large-cc25')
+    embedder = PreferenceEmbedder(model_name='google-bert/bert-base-multilingual-cased')
 
     # Generate embeddings for the attributes
     embedder.generate_attribute_embeddings(predefined_attributes)
