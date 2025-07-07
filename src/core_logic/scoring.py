@@ -100,9 +100,8 @@ def calculate_preference_score(
 
     return total_score
 
-# Example Usage (for testing/demonstration)
 if __name__ == "__main__":
-    # This part would typically be called from a higher-level script (e.g., cli.py or main.py)
+    # This part would typically be called from a higher-level script like cli.py 
     # and would use actual data loaded from `data/processed/`
 
     # 1. Initialize the PreferenceEmbedder and generate attribute embeddings
@@ -114,11 +113,10 @@ if __name__ == "__main__":
         "Coffee", "Date", "Scenic View", "Parking Available", "Wheelchair Accessible",
         "Wi-Fi Available", "Workspace"
     ]
-    embedder = PreferenceEmbedder(model_name='paraphrase-multilingual-MiniLM-L12-v2') # Changed model to a multilingual sentence embedding model
+    embedder = PreferenceEmbedder(model_name='paraphrase-multilingual-MiniLM-L12-v2')
     embedder.generate_attribute_embeddings(predefined_attributes)
 
-    # 2. Simulate reviews for a place (e.g., fetched from data_collection and processed)
-    # In a real scenario, place_reviews would come from your loaded data.
+    # In a real scenario, place_reviews would come from data processed by Tasneem and Nada
     place_reviews_cafe_a = [
         {'text': 'This cafe is super cozy, with soft lighting and comfortable chairs. Perfect for a quiet afternoon.'},
         {'text': 'Great coffee, but it can get quite lively on weekends. Not really romantic, but good for friends.'},
