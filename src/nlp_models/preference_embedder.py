@@ -8,7 +8,7 @@ class PreferenceEmbedder:
     Manages the generation of contextual embeddings for predefined attributes
     and calculates the similarity of review texts to these attributes.
     """
-    def __init__(self, model_name: str = 'paraphrase-multilingual-MiniLM-L12-v2'): # Changed model to a multilingual sentence embedding model
+    def __init__(self, model_name: str = 'paraphrase-multilingual-MiniLM-L12-v2'):
         """
         Initializes the SentenceTransformer model.
 
