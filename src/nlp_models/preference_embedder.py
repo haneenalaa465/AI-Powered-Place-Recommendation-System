@@ -1,3 +1,5 @@
+# src/nlp_models/preference_embedder.py
+
 import numpy as np
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
@@ -14,12 +16,18 @@ class PreferenceEmbedder:
 
         Args:
             model_name (str): The name of the pre-trained SentenceTransformer model to use.
-                              'paraphrase-multilingual-MiniLM-L12-v2' is a good multilingual
-                              model optimized for sentence similarity.
         """
         print(f"Loading SentenceTransformer model: {model_name}...")
-        self.model = SentenceTransformer(model_name)
-        print("Model loaded successfully.")
+        try:
+            # Added trust_remote_code=True to handle potential custom components
+            self.model = SentenceTransformer(model_name, trust_remote_code=True)
+            print("Model loaded successfully.")
+        except Exception as e:
+            print(f"Error loading model {model_name}: {e}")
+            print("Falling back to 'paraphrase-multilingual-MiniLM-L12-v2' for stability.")
+            self.model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
+            print("Fallback model 'paraphrase-multilingual-MiniLM-L12-v2' loaded successfully.")
+        
         self.attribute_embeddings = None
         self.attribute_names = None
 
@@ -93,61 +101,246 @@ if __name__ == "__main__":
     # Generate embeddings for the attributes
     embedder.generate_attribute_embeddings(predefined_attributes)
 
-    # Test with some example review texts (English, Arabic, Tunisian, French)
-    print("\n--- Review Attribute Scores ---")
+    # --- Combined Review Data (English, Arabic, Tunisian, French) ---
+    # Note: I've included translations/notes for clarity, these are not part of the review text itself.
+    all_reviews_data = {
+        "texts": [
+            "Absolutely fantastic! The best I've ever had.", # English
+            "الأكل كان تحفة والخدمة ممتازة، مكان يستاهل التجربة.", # Arabic: Food was amazing and service excellent, a place worth trying.
+            "المكان رايق والقاعدة بتاعته حلوة، أكيد هروح تاني.", # Arabic: The place is calm and its seating is nice, I'll definitely go again.
+            "A wonderful experience, highly recommended.", # English
+            "شي بيشهي القلب، عنجد بنصحكن فيه.", # Arabic (Levantine): Something that makes the heart crave it, I really recommend it.
+            "The food was good, but it was a bit too crowded.", # English
+            "المطعم ذا بطل، يستاهل كل ريال.", # Arabic (Gulf): This restaurant is a hero, worth every riyal.
+            "شغل عدل ومضبوط.", # Arabic (Egyptian/Levantine): Work is fair and precise.
+            "بنة على بنة، يعطيهم الصحة.", # Tunisian: Delicious on delicious, bless them.
+            "The service was a little slow.", # English
+            "داكشي بنين بزاف، تبارك الله عليهم.", # Moroccan: That thing is very tasty, bless them.
+            "المحل واعر والخدمة نقية.", # Moroccan: The place is awesome and the service is clean.
+            "Honestly, everything was perfect to the millimeter.", # English
+            "كل حاجة كانت مظبوطة.", # Arabic: Everything was precise.
+            "الأكل كتير طيب والمنظر بيعقد.", # Arabic (Levantine): The food is very good and the view is amazing.
+            "Five stars all the way!", # English
+            "مره عجبني المكان، رايق وهادي.", # Arabic: I really liked the place, calm and quiet.
+            "It's okay, nothing too special.", # English
+            "بلاصة ياسر مزيانة.", # Tunisian: A very nice place.
+            "The staff went above and beyond.", # English
+            "غادي نرجع ليه مرة أخرى.", # Moroccan: I will return to it again.
+            "الخدمة عشرة على عشرة.", # Arabic: Service ten out of ten.
+            "The ambiance is perfect for a date night.", # English
+            "أحلى قعدة مع رفقاتي.", # Arabic: Best seating with my friends.
+            "يستاهل كل ريال تدفعه.", # Arabic: Worth every riyal you pay.
+            "المنظر من هناك تحفة.", # Arabic: The view from there is amazing.
+            "The food was simply divine.", # English
+            "تجربة ممتعة جداً، أنصح به بشدة.", # Arabic: A very enjoyable experience, highly recommend it.
+            "المكان جميل جداً والمنظر ساحر.", # Arabic: The place is very beautiful and the view is enchanting.
+            "The coffee here is top-notch.", # English
+            "كل شيء كان نظيفاً ومنظماً.", # Arabic: Everything was clean and organized.
+            "فريق العمل ودود للغاية ومتعاون.", # Arabic: The staff is very friendly and helpful.
+            "The prices are reasonable for the quality.", # English
+            "اللقمات طيبين والمحل بجنن.", # Arabic (Levantine): The bites are good and the place is amazing.
+            "الجلسات الخارجية جميلة جداً.", # Arabic: The outdoor seating is very beautiful.
+            "المكان يستحق الزيارة مرة ومرتين وثلاث.", # Arabic: The place is worth visiting once, twice, and thrice.
+            "الأكل طيب والأسعار مقبولة.", # Arabic: Food is good and prices are acceptable.
+            "The service was impeccable.", # English
+            "الخدمة ممتازة وسريعة.", # Arabic: Service is excellent and fast.
+            "مكان هادئ ومريح للأعصاب.", # Arabic: A quiet and relaxing place for the nerves.
+            "الديكور بسيط وحلو.", # Arabic: The decor is simple and nice.
+            "المطعم المفضل عندي.", # Arabic: My favorite restaurant.
+            "الجو العام للمكان لطيف.", # Arabic: The overall atmosphere of the place is nice.
+            "A hidden gem in the city.", # English
+            "القهوة عندهم مضبوطة.", # Arabic: Their coffee is perfect.
+            "أنصح فيه للعائلات.", # Arabic: I recommend it for families.
+            "موقعه ممتاز وسهل الوصول.", # Arabic: Its location is excellent and easy to access.
+            "الطاقم محترف جداً.", # Arabic: The staff is very professional.
+            "Incredible value for money.", # English
+            "الأكل وصل بسرعة وكان ساخن.", # Arabic: Food arrived quickly and was hot.
+            "أجواء المطعم رائعة.", # Arabic: The restaurant's ambiance is wonderful.
+            "يستحق كل التقدير.", # Arabic: Deserves all appreciation.
+            "تجربة لن أنساها.", # Arabic: An unforgettable experience.
+            "Outstanding quality and presentation.", # English
+            "كل شي كان مثالي.", # Arabic: Everything was perfect.
+            "Perfect in every way.", # English
+            "المكان نظيف ومرتب.", # Arabic: The place is clean and tidy.
+            "A must-visit spot.", # English
+            "الخدمة طيارة.", # Tunisian: Service is fast (like an airplane).
+            "ماكلة بنينة على اللخر.", # Tunisian: Food is very tasty.
+            "منظر يفتح النفس.", # Arabic: A breathtaking view.
+            "الموظفين كانوا بشوشين.", # Arabic: The staff were cheerful.
+            "تجربة فريدة من نوعها.", # Arabic: A unique experience.
+            "أفضل مكان جربته في حياتي.", # Arabic: The best place I've tried in my life.
+            "الأسعار كانت معقولة جداً.", # Arabic: The prices were very reasonable.
+            "كل شيء كان على أكمل وجه.", # Arabic: Everything was perfect.
+            "المكان يتفوق على المنافسين.", # Arabic: The place surpasses competitors.
+            "الديكورات الداخلية مذهلة.", # Arabic: The interior decorations are amazing.
+            "خدمة العملاء كانت رائعة.", # Arabic: Customer service was wonderful.
+            "A truly memorable meal.", # English
+            "الطعم أصلي والنكهات واضحة.", # Arabic: The taste is original and the flavors are clear.
+            "المكان فاق توقعاتي.", # Arabic: The place exceeded my expectations.
+            "أنصح بزيارته في أقرب فرصة.", # Arabic: I recommend visiting it as soon as possible.
+            "الجودة عالية جداً.", # Arabic: The quality is very high.
+            "مكان مثالي للاسترخاء.", # Arabic: A perfect place for relaxation.
+            "The portions were generous and delicious.", # English
+            "العصيرات عندهم طازجة ومنعشة.", # Arabic: Their juices are fresh and refreshing.
+            "الموسيقى كانت هادئة ومناسبة.", # Arabic: The music was quiet and suitable.
+            "الاهتمام بالتفاصيل كان واضح.", # Arabic: Attention to detail was clear.
+            "مستوى النظافة عالي جداً.", # Arabic: The level of cleanliness is very high.
+            "كل طبق كان ألذ من الثاني.", # Arabic: Every dish was tastier than the last.
+            "I'm already planning my next visit.", # English
+            "أحسن اختيار لمناسبة خاصة.", # Arabic: Best choice for a special occasion.
+            "The dessert was the highlight of the meal.", # English
+            "الموقع استراتيجي ومميز.", # Arabic: The location is strategic and distinctive.
+            "فريق عمل سريع الاستجابة.", # Arabic: Responsive staff.
+            "الأجواء كانت مريحة.", # Arabic: The atmosphere was comfortable.
+            "تجربة تستحق خمس نجوم.", # Arabic: An experience worth five stars.
+            "The menu has a great variety of options.", # English
+            "مكان تشعر فيه بالترحاب.", # Arabic: A place where you feel welcome.
+            "الجودة مقابل السعر ممتازة.", # Arabic: Excellent quality for the price.
+            "The best view in town.", # English
+            "التقديم كان احترافي.", # Arabic: The presentation was professional.
+            "أكيد سأعود مرة أخرى.", # Arabic: I will definitely return again.
+            "Ce restaurant est très élégant et les plats sont gastronomiques.", # French: This restaurant is very elegant and the dishes are gourmet.
+            "L'ambiance est décontractée, parfaite pour une soirée entre amis.", # French: The ambiance is casual, perfect for a night out with friends.
+            "Idéal pour travailler, le Wi-Fi est rapide et les sièges confortables.", # French: Ideal for working, the Wi-Fi is fast and the seats are comfortable.
+            "La terrasse offre une vue magnifique sur la ville.", # French: The terrace offers a magnificent view of the city.
+            "Le personnel est très accueillant et le service est rapide.", # French: The staff is very welcoming and the service is fast.
+            "Un endroit calme pour lire un livre avec un bon café.", # French: A quiet place to read a book with good coffee.
+            "Les options végétaliennes sont délicieuses et variées.", # French: The vegan options are delicious and varied.
+            "Le parking est facile d'accès, ce qui est un plus.", # French: Parking is easy to access, which is a plus.
+            "C'est un lieu artistique avec une décoration unique.", # French: It's an artistic place with unique decoration.
+            "Parfait pour une sortie en famille, il y a de l'espace pour les enfants.", # French: Perfect for a family outing, there is space for children.
+            "Les desserts sont incroyables, surtout le tiramisu.", # French: The desserts are incredible, especially the tiramisu.
+            "Un endroit très animé, idéal pour faire la fête.", # French: A very lively place, ideal for partying.
+            "L'accès en fauteuil roulant est très bien pensé.", # French: Wheelchair access is very well thought out.
+            "Ce café accepte les animaux de compagnie, c'est génial !", # French: This cafe accepts pets, that's great!
+            "Les portions sont généreuses et le rapport qualité-prix est excellent." # French: Portions are generous and the value for money is excellent.
+        ]
+    }
 
-    # English Examples (retained)
-    review_en1 = "This cafe has such a warm and inviting atmosphere, perfect for reading."
-    review_en2 = "Super modern decor and great music, definitely a trendy spot for young people."
-    review_en3 = "The dim lighting and soft jazz made it ideal for a romantic dinner."
-    review_en4 = "Very noisy and crowded, but the energy was amazing! Great for groups."
-    review_en5 = "It's a bit loud, but the food was fantastic. Not very cozy though."
-    review_en6 = "" # Empty review
-    review_en7 = "This place is both trendy and cozy, a rare combination!"
-    review_en8 = "Excellent fine dining experience with an elegant ambiance and gourmet dishes."
-    review_en9 = "A great spot for remote work, good coffee and reliable Wi-Fi."
+    # Convert raw text list to the expected format [{'text': 'review content'}]
+    all_reviews = [{'text': r} for r in all_reviews_data['texts']]
 
-    print(f"\n--- English Reviews ---")
-    print(f"Review EN1 ('{review_en1}'): {embedder.get_review_attribute_scores(review_en1)}")
-    print(f"Review EN2 ('{review_en2}'): {embedder.get_review_attribute_scores(review_en2)}")
-    print(f"Review EN3 ('{review_en3}'): {embedder.get_review_attribute_scores(review_en3)}")
-    print(f"Review EN4 ('{review_en4}'): {embedder.get_review_attribute_scores(review_en4)}")
-    print(f"Review EN5 ('{review_en5}'): {embedder.get_review_attribute_scores(review_en5)}")
-    print(f"Review EN6 ('{review_en6}'): {embedder.get_review_attribute_scores(review_en6)}")
-    print(f"Review EN7 ('{review_en7}'): {embedder.get_review_attribute_scores(review_en7)}")
-    print(f"Review EN8 ('{review_en8}'): {embedder.get_review_attribute_scores(review_en8)}")
-    print(f"Review EN9 ('{review_en9}'): {embedder.get_review_attribute_scores(review_en9)}")
+    # --- Simulate various places with mixed language reviews to show preferences ---
 
-    # Arabic Examples
-    review_ar1 = "هذا المقهى دافئ ومريح جداً، مثالي للقراءة." # This cafe is very warm and comfortable, ideal for reading. (Cozy, Quiet)
-    review_ar2 = "ديكور عصري وموسيقى رائعة، مكان أنيق للشباب." # Modern decor and great music, a stylish place for young people. (Trendy)
-    review_ar3 = "الإضاءة الخافتة والموسيقى الهادئة جعلته مثالياً لعشاء رومانسي." # Dim lighting and quiet music made it ideal for a romantic dinner. (Romantic)
-    review_ar4 = "المكان صاخب ومزدحم جداً، لكن الطاقة كانت مذهلة! رائع للمجموعات." # The place is very noisy and crowded, but the energy was amazing! Great for groups. (Lively, Good for Groups)
-    review_ar5 = "أكلهم بنين برشا والجو مزيان." # Their food is very tasty and the atmosphere is nice. (Tunisian dialect - "بنين برشا" for very tasty, "مزيان" for nice/beautiful) - (Comfort Food, Casual)
-    review_ar6 = "بلاصة نظيفة و فيها إنترنت قوية تنجم تخدم على روحك." # A clean place with strong internet, you can work comfortably. (Tunisian dialect - "بلاصة" for place, "نظيفة" for clean, "قوية" for strong, "تنجم تخدم على روحك" for you can work comfortably) - (Workspace, Wi-Fi Available)
+    # Place 1: Cozy & Quiet Cafe (mix of English, Arabic, French)
+    place_reviews_cozy_cafe = [
+        all_reviews[0],   # English: "Absolutely fantastic! The best I've ever had." (Positive, general)
+        all_reviews[2],   # Arabic: "المكان رايق والقاعدة بتاعته حلوة، أكيد هروح تاني." (Calm, nice seating -> Quiet, Cozy)
+        all_reviews[16],  # Arabic: "مره عجبني المكان، رايق وهادي." (Calm and quiet -> Quiet, Cozy)
+        all_reviews[39],  # Arabic: "مكان هادئ ومريح للأعصاب." (Quiet and relaxing -> Quiet, Cozy)
+        all_reviews[97],  # French: "Un endroit calme pour lire un livre avec un bon café." (Quiet, Coffee, Cozy)
+        all_reviews[95]   # French: "L'ambiance est décontractée, parfaite pour une soirée entre amis." (Casual)
+    ]
+
+    # Place 2: Trendy & Lively Restaurant (mix of English, Arabic, French)
+    place_reviews_trendy_restaurant = [
+        all_reviews[1],   # Arabic: "الأكل كان تحفة والخدمة ممتازة، مكان يستاهل التجربة." (Excellent food/service)
+        all_reviews[5],   # English: "The food was good, but it was a bit too crowded." (Lively)
+        all_reviews[22],  # English: "The ambiance is perfect for a date night." (Romantic, Date)
+        all_reviews[25],  # Arabic: "المنظر من هناك تحفة." (Amazing view -> Scenic View)
+        all_reviews[93],  # French: "Ce restaurant est très élégant et les plats sont gastronomiques." (Elegant, Gourmet)
+        all_reviews[101]  # French: "Un endroit très animé, idéal pour faire la fête." (Lively)
+    ]
+
+    # Place 3: Family-Friendly & Accessible Spot (mix of English, Arabic, French)
+    place_reviews_family_spot = [
+        all_reviews[31],  # Arabic: "فريق العمل ودود للغاية ومتعاون." (Friendly staff)
+        all_reviews[46],  # Arabic: "أنصح فيه للعائلات." (Recommend for families -> Family-Friendly)
+        all_reviews[75],  # English: "The portions were generous and delicious." (Comfort Food)
+        all_reviews[100], # French: "Parfait pour une sortie en famille, il y a de l'espace pour les enfants." (Family-Friendly)
+        all_reviews[102]  # French: "L'accès en fauteuil roulant est très bien pensé." (Wheelchair Accessible)
+    ]
+
+    # Place 4: Workspace & Coffee Spot (mix of English, Arabic, Tunisian, French)
+    place_reviews_workspace_cafe = [
+        all_reviews[29],  # English: "The coffee here is top-notch." (Coffee)
+        all_reviews[30],  # Arabic: "كل شيء كان نظيفاً ومنظماً." (Clean)
+        all_reviews[94],  # French: "Idéal pour travailler, le Wi-Fi est rapide et les sièges confortables." (Workspace, Wi-Fi Available)
+        all_reviews[44],  # Arabic: "القهوة عندهم مضبوطة." (Coffee is perfect)
+        all_reviews[33],  # Arabic (Levantine): "اللقمات طيبين والمحل بجنن." (Good food, amazing place)
+        all_reviews[8]    # Tunisian: "بنة على بنة، يعطيهم الصحة." (Delicious)
+    ]
+
+    # Place 5: Artistic & Bohemian Place (mix of English, Arabic, French)
+    place_reviews_artistic_bohemian = [
+        all_reviews[43],  # English: "A hidden gem in the city."
+        all_reviews[40],  # Arabic: "الديكور بسيط وحلو." (Decor is simple and nice -> Casual, Artistic)
+        all_reviews[64],  # Arabic: "الديكورات الداخلية مذهلة." (Interior decorations are amazing -> Artistic, Elegant)
+        all_reviews[99]   # French: "C'est un lieu artistique avec une décoration unique." (Artistic, Bohemian)
+    ]
+
+    # Place with no reviews
+    place_reviews_empty = []
+
+    # Place with reviews that are empty strings or None
+    place_reviews_only_empty_text = [{'text': ''}, {'text': '   '}, {'text': None}]
 
 
-    print(f"\n--- Arabic Reviews ---")
-    print(f"Review AR1 ('{review_ar1}'): {embedder.get_review_attribute_scores(review_ar1)}")
-    print(f"Review AR2 ('{review_ar2}'): {embedder.get_review_attribute_scores(review_ar2)}")
-    print(f"Review AR3 ('{review_ar3}'): {embedder.get_review_attribute_scores(review_ar3)}")
-    print(f"Review AR4 ('{review_ar4}'): {embedder.get_review_attribute_scores(review_ar4)}")
-    print(f"Review AR5 (Tunisian) ('{review_ar5}'): {embedder.get_review_attribute_scores(review_ar5)}")
-    print(f"Review AR6 (Tunisian) ('{review_ar6}'): {embedder.get_review_attribute_scores(review_ar6)}")
+    print("\n--- Place Attribute Profiles (Multi-Language Reviews) ---")
 
-    # French Examples
-    review_fr1 = "Ce café a une ambiance tellement chaleureuse et accueillante, parfait pour lire." # This cafe has such a warm and inviting atmosphere, perfect for reading. (Cozy, Quiet)
-    review_fr2 = "Décor super moderne et bonne musique, un endroit vraiment branché pour les jeunes." # Super modern decor and good music, definitely a trendy spot for young people. (Trendy)
-    review_fr3 = "L'éclairage tamisé et le jazz doux en ont fait l'endroit idéal pour un dîner romantique." # The dim lighting and soft jazz made it ideal for a romantic dinner. (Romantic)
-    review_fr4 = "Très bruyant et bondé, mais l'énergie était incroyable ! Idéal pour les groupes." # Very noisy and crowded, but the energy was amazing! Great for groups. (Lively, Good for Groups)
-    review_fr5 = "La nourriture était saine et délicieuse, avec de nombreuses options végétaliennes." # The food was healthy and delicious, with many vegan options. (Healthy, Vegan-Friendly)
-    review_fr6 = "Vue imprenable et service impeccable, parfait pour une date." # Breathtaking view and impeccable service, perfect for a date. (Scenic View, Date)
+    profile_cozy_cafe = calculate_place_attribute_profile(place_reviews_cozy_cafe, embedder, predefined_attributes)
+    print(f"\nProfile for Cozy Cafe: {profile_cozy_cafe}")
 
+    profile_trendy_restaurant = calculate_place_attribute_profile(place_reviews_trendy_restaurant, embedder, predefined_attributes)
+    print(f"\nProfile for Trendy Restaurant: {profile_trendy_restaurant}")
 
-    print(f"\n--- French Reviews ---")
-    print(f"Review FR1 ('{review_fr1}'): {embedder.get_review_attribute_scores(review_fr1)}")
-    print(f"Review FR2 ('{review_fr2}'): {embedder.get_review_attribute_scores(review_fr2)}")
-    print(f"Review FR3 ('{review_fr3}'): {embedder.get_review_attribute_scores(review_fr3)}")
-    print(f"Review FR4 ('{review_fr4}'): {embedder.get_review_attribute_scores(review_fr4)}")
-    print(f"Review FR5 ('{review_fr5}'): {embedder.get_review_attribute_scores(review_fr5)}")
-    print(f"Review FR6 ('{review_fr6}'): {embedder.get_review_attribute_scores(review_fr6)}")
+    profile_family_spot = calculate_place_attribute_profile(place_reviews_family_spot, embedder, predefined_attributes)
+    print(f"\nProfile for Family-Friendly Spot: {profile_family_spot}")
+
+    profile_workspace_cafe = calculate_place_attribute_profile(place_reviews_workspace_cafe, embedder, predefined_attributes)
+    print(f"\nProfile for Workspace Cafe: {profile_workspace_cafe}")
+
+    profile_artistic_bohemian = calculate_place_attribute_profile(place_reviews_artistic_bohemian, embedder, predefined_attributes)
+    print(f"\nProfile for Artistic/Bohemian Place: {profile_artistic_bohemian}")
+
+    profile_empty = calculate_place_attribute_profile(place_reviews_empty, embedder, predefined_attributes)
+    print(f"\nProfile for Empty Reviews Place: {profile_empty}")
+
+    profile_only_empty_text = calculate_place_attribute_profile(place_reviews_only_empty_text, embedder, predefined_attributes)
+    print(f"\nProfile for Only Empty Text Reviews Place: {profile_only_empty_text}")
+
+    # --- Preference Scores with Multi-Language Profiles ---
+    print("\n--- Preference Scores (Multi-Language Examples) ---")
+
+    # User 1: Prefers Cozy and Quiet
+    user_prefs_1 = {"Cozy": 0.6, "Quiet": 0.4}
+    score_cozy_cafe_user_1 = calculate_preference_score(user_prefs_1, profile_cozy_cafe, predefined_attributes)
+    score_trendy_restaurant_user_1 = calculate_preference_score(user_prefs_1, profile_trendy_restaurant, predefined_attributes)
+    print(f"\nUser 1 (Cozy/Quiet) - Score for Cozy Cafe: {score_cozy_cafe_user_1:.4f}")
+    print(f"User 1 (Cozy/Quiet) - Score for Trendy Restaurant: {score_trendy_restaurant_user_1:.4f}")
+
+    # User 2: Prefers Trendy and Lively
+    user_prefs_2 = {"Trendy": 0.5, "Lively": 0.5}
+    score_cozy_cafe_user_2 = calculate_preference_score(user_prefs_2, profile_cozy_cafe, predefined_attributes)
+    score_trendy_restaurant_user_2 = calculate_preference_score(user_prefs_2, profile_trendy_restaurant, predefined_attributes)
+    print(f"\nUser 2 (Trendy/Lively) - Score for Cozy Cafe: {score_cozy_cafe_user_2:.4f}")
+    print(f"User 2 (Trendy/Lively) - Score for Trendy Restaurant: {score_trendy_restaurant_user_2:.4f}")
+
+    # User 3: Prefers Family-Friendly
+    user_prefs_3 = {"Family-Friendly": 1.0}
+    score_cozy_cafe_user_3 = calculate_preference_score(user_prefs_3, profile_cozy_cafe, predefined_attributes)
+    score_family_spot_user_3 = calculate_preference_score(user_prefs_3, profile_family_spot, predefined_attributes)
+    print(f"\nUser 3 (Family-Friendly) - Score for Cozy Cafe: {score_cozy_cafe_user_3:.4f}")
+    print(f"User 3 (Family-Friendly) - Score for Family-Friendly Spot: {score_family_spot_user_3:.4f}")
+
+    # User 4: Prefers Workspace and Wi-Fi
+    user_prefs_4 = {"Workspace": 0.7, "Wi-Fi Available": 0.3}
+    score_cozy_cafe_user_4 = calculate_preference_score(user_prefs_4, profile_cozy_cafe, predefined_attributes)
+    score_workspace_cafe_user_4 = calculate_preference_score(user_prefs_4, profile_workspace_cafe, predefined_attributes)
+    print(f"\nUser 4 (Workspace/Wi-Fi) - Score for Cozy Cafe: {score_cozy_cafe_user_4:.4f}")
+    print(f"User 4 (Workspace/Wi-Fi) - Score for Workspace Cafe: {score_workspace_cafe_user_4:.4f}")
+
+    # User 5: Prefers Gourmet and Elegant
+    user_prefs_5 = {"Gourmet": 0.5, "Elegant": 0.5}
+    score_trendy_restaurant_user_5 = calculate_preference_score(user_prefs_5, profile_trendy_restaurant, predefined_attributes)
+    print(f"\nUser 5 (Gourmet/Elegant) - Score for Trendy Restaurant: {score_trendy_restaurant_user_5:.4f}")
+
+    # User 6: Prefers Artistic and Bohemian
+    user_prefs_6 = {"artistic": 0.6, "Bohemian": 0.4}
+    score_artistic_bohemian_user_6 = calculate_preference_score(user_prefs_6, profile_artistic_bohemian, predefined_attributes)
+    print(f"\nUser 6 (Artistic/Bohemian) - Score for Artistic/Bohemian Place: {score_artistic_bohemian_user_6:.4f}")
+
+    # Example User 7: No preferences specified (should return 0)
+    user_prefs_7 = {}
+    score_cozy_cafe_user_7 = calculate_preference_score(user_prefs_7, profile_cozy_cafe, predefined_attributes)
+    print(f"\nUser 7 (No Preferences) - Score for Cozy Cafe: {score_cozy_cafe_user_7:.4f}")
