@@ -8,7 +8,7 @@ class PreferenceEmbedder:
     Manages the generation of contextual embeddings for predefined attributes
     and calculates the similarity of review texts to these attributes.
     """
-    def __init__(self, model_name: str = 'paraphrase-multilingual-MiniLM-L12-v2'):
+    def __init__(self, model_name: str = 'jinaai/jina-embeddings-v3'):
         """
         Initializes the SentenceTransformer model.
 
@@ -88,7 +88,7 @@ if __name__ == "__main__":
     ]
 
     # Initialize the embedder with the recommended multilingual model
-    embedder = PreferenceEmbedder(model_name='paraphrase-multilingual-MiniLM-L12-v2')
+    embedder = PreferenceEmbedder(model_name='jinaai/jina-embeddings-v3')
 
     # Generate embeddings for the attributes
     embedder.generate_attribute_embeddings(predefined_attributes)
