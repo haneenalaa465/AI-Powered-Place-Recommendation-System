@@ -1,3 +1,16 @@
+from src.nlp_models.sentiment_analyzer import SentimentAnalyzer
+from src.nlp_models.preference_embedder import PreferenceEmbedder
+from src.core_logic.ranking import rank_places
+
+import os
+
+# Get the absolute path of the directory containing this script (src/ui)
+_UI_DIR = os.path.dirname(os.path.abspath(__file__))
+# Navigate up to the project's root directory
+PROJECT_ROOT = os.path.abspath(os.path.join(_UI_DIR, '..'))
+# Define the absolute path to the models directory
+MODELS_DIR = os.path.join(PROJECT_ROOT, 'models')
+
 if __name__ == "__main__":
 
     # 1. Initialize the PreferenceEmbedder and generate attribute embeddings
@@ -11,37 +24,56 @@ if __name__ == "__main__":
     ]
     embedder = PreferenceEmbedder(model_name='facebook/mbart-large-cc25') # Changed model to mBART
     embedder.generate_attribute_embeddings(predefined_attributes)
+    
+    sentiment_analyzer = SentimentAnalyzer(
+        en_model_path=os.path.join(MODELS_DIR, 'roberta'),
+        ar_model_path=os.path.join(MODELS_DIR, 'araberta')
+    )
+    
+    embedder.generate_attribute_embeddings(predefined_attributes)
 
-    # 2. Simulate reviews for a place (e.g., fetched from data_collection and processed)
-    # In a real scenario, place_reviews would come from your loaded data.
-    place_reviews_cafe_a = [
-        {'text': 'This cafe is super cozy, with soft lighting and comfortable chairs. Perfect for a quiet afternoon.'},
-        {'text': 'Great coffee, but it can get quite lively on weekends. Not really romantic, but good for friends.'},
-        {'text': 'I love the cozy vibe here. It feels very welcoming and calm.'},
-        {'text': 'The staff is friendly, and the atmosphere is very family-friendly, lots of space for kids.'},
-        {'text': 'Good Wi-Fi and plenty of power outlets, ideal for getting some work done.'}
+    # --- 2. Define User Data (as before) ---
+    user_data = {
+        "preferences": {"Lively": 0.6, "Trendy": 0.4},
+        "budget": 2, # User prefers mid-range to expensive
+        "coords": (30.033333, 31.233334) # User's location (Cairo)
+    }
+
+    # --- 3. Define a LIST of places to rank ---
+    places_to_rank = [
+        {
+            "name": "The Grand Cafe",
+            "reviews": [{'text': 'Very trendy spot with great music! Always lively.'}],
+            "budget": 2,
+            "coords": (30.0444, 31.2357) # Close by
+        },
+        {
+            "name": "Quiet Corner Books",
+            "reviews": [{'text': 'A very quiet and cozy place for reading.'}],
+            "budget": 0,
+            "coords": (30.0561, 31.2394) # A bit further
+        },
+        {
+            "name": "Uptown Lounge",
+            "reviews": [{'text': 'Super energetic and trendy. The place to be seen.'}],
+            "budget": 3,
+            "coords": (30.0450, 31.2360) # Also close by
+        }
     ]
 
-    place_reviews_restaurant_b = [
-        {'text': 'Very trendy restaurant with a modern minimalist design. A bit noisy but the food is excellent.'},
-        {'text': 'Definitely a lively spot, great for a night out with friends. Not cozy at all.'},
-        {'text': 'The ambiance is chic and trendy, but not really romantic. More for a fun, energetic crowd.'},
-        {'text': 'The gourmet dishes were exquisite, truly a fine dining experience.'}
-    ]
+    # --- 4. Get the ranked list of places! ---
+    ranked_results = rank_places(
+        user_data=user_data,
+        places_list=places_to_rank,
+        embedder=embedder,
+        sentiment_analyzer=sentiment_analyzer,
+        predefined_attributes=predefined_attributes
+    )
 
-    place_reviews_empty = [] # No reviews for this place
-    place_reviews_only_empty_text = [{'text': ''}, {'text': '   '}, {'text': None}] # Reviews with no content
-
-    print("\n--- Place Attribute Profiles ---")
-
-    profile_cafe_a = calculate_place_attribute_profile(place_reviews_cafe_a, embedder, predefined_attributes)
-    print(f"\nProfile for Cafe A: {profile_cafe_a}")
-
-    profile_restaurant_b = calculate_place_attribute_profile(place_reviews_restaurant_b, embedder, predefined_attributes)
-    print(f"\nProfile for Restaurant B: {profile_restaurant_b}")
-
-    profile_empty = calculate_place_attribute_profile(place_reviews_empty, embedder, predefined_attributes)
-    print(f"\nProfile for Empty Reviews Place: {profile_empty}")
-
-    profile_only_empty_text = calculate_place_attribute_profile(place_reviews_only_empty_text, embedder, predefined_attributes)
-    print(f"\nProfile for Only Empty Text Reviews Place: {profile_only_empty_text}")
+    # --- 5. Display the sorted results ---
+    print("\n--- Top Recommendations ---")
+    for i, place in enumerate(ranked_results):
+        score = place['scoring_details']['final_score']
+        print(f"{i+1}. {place['name']} (Score: {score:.4f})")
+        # Optional: print more details
+        # print(f"   - Details: {place['scoring_details']}")
