@@ -23,3 +23,8 @@ accelerate>=0.20.0
 # Development dependencies (optional)
 # pytest>=6.0.0
 # pytest-cov>=2.0.0
+
+pandas
+googlemaps
+python-dotenv
+nest-asyncio
