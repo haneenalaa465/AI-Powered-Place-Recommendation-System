@@ -1,2 +1,3 @@
 /src/models/roberta/
 /src/models/araberta/
+.env
