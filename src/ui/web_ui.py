@@ -170,7 +170,7 @@ def get_recommendations():
         # Extract user preferences
         preferences = data.get('preferences', {})
         user_budget = data.get('budget', 2)
-        user_coords = data.get('coords', [30.033333, 31.233334])  # Default to Cairo
+        user_coords = data.get('coords', [29.9595, 31.2589])  # Default to Maadi
         
         # Normalize preferences
         total_weight = sum(preferences.values())
