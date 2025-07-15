@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from src.nlp_models.sentiment_analyzer import SentimentAnalyzer
 from src.nlp_models.preference_embedder import PreferenceEmbedder
 from src.core_logic.ranking import rank_places
+from config.settings import BASIR_JSON_PATH
 
 app = Flask(__name__)
 CORS(app)
@@ -26,7 +27,7 @@ predefined_attributes = [
 ]
 
 def load_places_data():
-    with open('data/raw/basir_combined_places_reviews_final_20250710_142531.json', 'r', encoding='utf-8') as f:
+    with open(BASIR_JSON_PATH, 'r', encoding='utf-8') as f:
         return json.load(f)
 
 places_data = load_places_data()
