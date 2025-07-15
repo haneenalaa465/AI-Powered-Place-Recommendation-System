@@ -1,9 +1,6 @@
-# src/core_logic/ranking.py
-
 import math
 from typing import List, Dict, Any, Tuple
 
-# Assuming your updated SentimentAnalyzer provides scores from 0 to 1
 from src.nlp_models.sentiment_analyzer import SentimentAnalyzer
 from src.nlp_models.preference_embedder import PreferenceEmbedder
 from src.core_logic.scoring import calculate_place_attribute_profile, calculate_preference_score
@@ -57,11 +54,9 @@ def _calculate_budget_score(user_budget: int, place_budget: int) -> float:
     Returns:
         float: A normalized budget score between 0.0 and 1.0.
     """
-    # The max possible difference on a 0-3 scale is 3.
     max_budget_diff = 3.0
     diff = abs(user_budget - place_budget)
     
-    # Normalize score: 1 for 0 difference, 0 for max difference
     return 1.0 - (diff / max_budget_diff)
 
 
@@ -77,7 +72,7 @@ def _calculate_aggregated_sentiment(reviews_with_sentiment: List[Dict[str, Any]]
         float: The average sentiment score (0-1). Returns 0.5 if no reviews.
     """
     if not reviews_with_sentiment:
-        return 0.5  # Return a neutral score if there are no reviews
+        return 0.5  # if there is no reviews --> returns neutral score
 
     total_score = sum(review.get('sentiment_score', 0.5) for review in reviews_with_sentiment)
     return total_score / len(reviews_with_sentiment)
@@ -90,7 +85,8 @@ def calculate_final_score(
     user_data: Dict[str, Any],
     embedder: PreferenceEmbedder,
     sentiment_analyzer: SentimentAnalyzer,
-    predefined_attributes: List[str]
+    predefined_attributes: List[str],
+    max_distance_km: float = 10
 ) -> Dict[str, float]:
     """
     Calculates the final weighted score for a place based on multiple factors.
@@ -121,7 +117,7 @@ def calculate_final_score(
     
     # 3. Calculate Proximity Score (Weight: 0.30)
     proximity_score = _calculate_proximity_score(
-        user_data['coords'], place_data['coords']
+        user_data['coords'], place_data['coords'], max_distance_km
     )
 
     # 4. Calculate Budget Matching Score (Weight: 0.15)
@@ -129,7 +125,7 @@ def calculate_final_score(
         user_data['budget'], place_data['budget']
     )
 
-    # Apply the final weighted formula
+    # final weighted formula
     final_score = (
         (sentiment_score * 0.25) +
         (preference_score * 0.30) +
@@ -150,7 +146,8 @@ def rank_places(
     places_list: List[Dict[str, Any]],
     embedder: PreferenceEmbedder,
     sentiment_analyzer: SentimentAnalyzer,
-    predefined_attributes: List[str]
+    predefined_attributes: List[str],
+    max_distance_km: float = 10
 ) -> List[Dict[str, Any]]:
     """
     Calculates scores for multiple places and returns them sorted by final score.
@@ -172,20 +169,20 @@ def rank_places(
     print(f"\nScoring {len(places_list)} places...")
 
     for place in places_list:
-        # Calculate the score for the current place using the existing function
         score_details = calculate_final_score(
             place_data=place,
             user_data=user_data,
             embedder=embedder,
             sentiment_analyzer=sentiment_analyzer,
-            predefined_attributes=predefined_attributes
+            predefined_attributes=predefined_attributes,
+            max_distance_km=max_distance_km
         )
         
         # Add the detailed scores to the place's data
         place['scoring_details'] = score_details
         scored_places.append(place)
 
-    # Sort the list of places based on the nested 'final_score' in descending order
+    # Sort places based on the nested final_score in descending order
     sorted_places = sorted(
         scored_places,
         key=lambda p: p['scoring_details']['final_score'],

@@ -32,7 +32,7 @@ def _detect_language_by_character(text: str) -> str:
     elif english_chars > arabic_chars:
         return 'en'
     else:
-        # If counts are equal or both are zero, it's ambiguous
+        # ambiguous
         return 'unknown'
 
 class SentimentAnalyzer:
@@ -55,10 +55,10 @@ class SentimentAnalyzer:
             print(f"Loading Arabic sentiment model from: {ar_model_path}...")
             self.pipelines['ar'] = pipeline("sentiment-analysis", model=ar_model_path)
             
-            print("✅ All sentiment models loaded successfully.")
+            print(" All sentiment models loaded successfully.")
         except Exception as e:
             print(f"Error loading sentiment models: {e}")
-            self.pipelines = {} # Ensure pipelines is empty on failure
+            self.pipelines = {} 
 
     def analyze_reviews(self, reviews: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
@@ -90,7 +90,6 @@ class SentimentAnalyzer:
             lang = _detect_language_by_character(text)
 
             if lang in self.pipelines:
-                # Get the result from the appropriate model
                 result = self.pipelines[lang](text)[0]
                 # The models return LABEL_1 (positive) or LABEL_0 (negative)
                 review['sentiment_score'] = 1 if result['label'] == 'LABEL_1' else 0
