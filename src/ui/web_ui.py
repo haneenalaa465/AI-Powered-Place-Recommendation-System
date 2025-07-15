@@ -3,8 +3,8 @@ from flask_cors import CORS
 import os
 import sys
 import json
+import math
 
-# Add the project root to the path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from src.nlp_models.sentiment_analyzer import SentimentAnalyzer
@@ -14,7 +14,7 @@ from src.core_logic.ranking import rank_places
 app = Flask(__name__)
 CORS(app)
 
-# Global variables for models (initialize once)
+# Global variables for models 
 embedder = None
 sentiment_analyzer = None
 predefined_attributes = [
@@ -25,92 +25,32 @@ predefined_attributes = [
     "Wi-Fi Available", "Workspace"
 ]
 
-# Placeholder data for demonstration
-placeholder_places = [
-    {
-        "name": "The Grand Cafe",
-        "reviews": [
-            {"text": "Very trendy spot with great music! Always lively and energetic."},
-            {"text": "Perfect for groups, great atmosphere for socializing."},
-            {"text": "Modern decor and excellent coffee selection."}
-        ],
-        "budget": 2,
-        "coords": (30.0444, 31.2357),
-        "address": "Downtown Cairo"
-    },
-    {
-        "name": "Quiet Corner Books",
-        "reviews": [
-            {"text": "A very quiet and cozy place for reading and studying."},
-            {"text": "Perfect workspace with reliable Wi-Fi and comfortable seating."},
-            {"text": "Great coffee and peaceful environment for solo work."}
-        ],
-        "budget": 1,
-        "coords": (30.0561, 31.2394),
-        "address": "Zamalek District"
-    },
-    {
-        "name": "Uptown Lounge",
-        "reviews": [
-            {"text": "Super energetic and trendy. The place to be seen!"},
-            {"text": "Elegant setting with gourmet food and artistic decor."},
-            {"text": "Perfect for romantic dates with scenic city views."}
-        ],
-        "budget": 3,
-        "coords": (30.0450, 31.2360),
-        "address": "New Cairo"
-    },
-    {
-        "name": "Family Garden Restaurant",
-        "reviews": [
-            {"text": "Amazing family-friendly atmosphere with outdoor seating."},
-            {"text": "Great for kids, pet-friendly with excellent comfort food."},
-            {"text": "Wheelchair accessible with convenient parking."}
-        ],
-        "budget": 1,
-        "coords": (30.0333, 31.2200),
-        "address": "Maadi"
-    },
-    {
-        "name": "Bohemian Arts Cafe",
-        "reviews": [
-            {"text": "Incredibly artistic and bohemian vibe with unique decor."},
-            {"text": "Perfect for creative minds, great coffee and desserts."},
-            {"text": "Casual atmosphere that's inspiring and relaxing."}
-        ],
-        "budget": 2,
-        "coords": (30.0600, 31.2400),
-        "address": "Heliopolis"
-    },
-    {
-        "name": "Healthy Bites Kitchen",
-        "reviews": [
-            {"text": "Excellent healthy options with many vegan-friendly choices."},
-            {"text": "Fresh ingredients and nutritious meals that actually taste great."},
-            {"text": "Clean, bright atmosphere perfect for health-conscious diners."}
-        ],
-        "budget": 2,
-        "coords": (30.0400, 31.2300),
-        "address": "Dokki"
-    }
-]
+def load_places_data():
+    with open('data/raw/basir_combined_places_reviews_final_20250710_142531.json', 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+places_data = load_places_data()
 
 def initialize_models():
-    """Initialize the ML models once when the app starts."""
+  
+    """
+    Initializes the PreferenceEmbedder and SentimentAnalyzer models.
+
+    If the jinaai/jina-embeddings-v3 embedding model  can't be loaded, it uses .
+    """
     global embedder, sentiment_analyzer
     
     try:
         print("Initializing models...")
         
-        # Initialize PreferenceEmbedder
         embedder = PreferenceEmbedder(model_name='jinaai/jina-embeddings-v3')
         embedder.generate_attribute_embeddings(predefined_attributes)
         
-        # Initialize SentimentAnalyzer with fallback
+        # Initialize 
         try:
             sentiment_analyzer = SentimentAnalyzer(
-                en_model_path='./models/roberta',
-                ar_model_path='./models/araberta'
+                en_model_path='hayn404/roberta-finetuned',
+                ar_model_path='hayn404/araberta_finetuned'
             )
         except Exception as e:
             print(f"Warning: Could not load sentiment models: {e}")
@@ -143,7 +83,6 @@ class MockPreferenceEmbedder:
         
     def get_review_attribute_scores(self, review_text):
         import random
-        # Simple keyword matching for demo
         scores = {}
         review_lower = review_text.lower()
         
@@ -156,6 +95,18 @@ class MockPreferenceEmbedder:
                 
         return scores
 
+def haversine(coord1, coord2):
+    R = 6371  # Earth radius in km
+    lat1, lon1 = coord1
+    lat2, lon2 = coord2
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+    a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return R * c
+
 @app.route('/')
 def index():
     """Serve the main UI page."""
@@ -163,48 +114,110 @@ def index():
 
 @app.route('/api/recommend', methods=['POST'])
 def get_recommendations():
-    """API endpoint to get place recommendations."""
+    """
+    Endpoint to get a ranked list of places based on user's preferences.
+
+    Accepts a JSON payload with the following keys:
+
+    - preferences (dict): A dictionary of attribute names to their weights.
+    - budget (int): Budget category (0-3).
+    - city (str): City name (used to filter places by city).
+    - max_distance (float): Maximum distance from user's location to filter places.
+    - place_name (str): Name of a place to use as user's location (if provided).
+
+    Returns a JSON response with the following keys:
+
+    - success (bool): Whether the request was successful.
+    - recommendations (list): A list of dictionaries containing the recommended places.
+        Each dictionary contains the following keys:
+
+        - name (str)
+        - address (str)
+        - budget (int)
+        - scoring_details (dict): A dictionary of scoring details
+    """
     try:
         data = request.get_json()
-        
-        # Extract user preferences
         preferences = data.get('preferences', {})
         user_budget = data.get('budget', 2)
-        user_coords = data.get('coords', [29.9595, 31.2589])  # Default to Maadi
-        
-        # Normalize preferences
+        user_city = data.get('city', '').strip().lower()
+        max_distance = float(data.get('max_distance', 50))  # default 50km if not provided
+        place_name = data.get('place_name', '').strip().lower()
+
         total_weight = sum(preferences.values())
         if total_weight > 0:
             preferences = {k: v / total_weight for k, v in preferences.items()}
+
+        # Filter places by city 
+        filtered_places = places_data
+        if user_city:
+            filtered_places = [p for p in places_data if user_city in p.get('address', '').strip().lower()]
+        if not filtered_places:
+            return jsonify({"success": False, "error": "No places found for the specified city."}), 404
+
+        # If place_name is provided, use its coordinates as user's location, set default to first place in city or fallback
+        user_coords = None
+        if place_name:
+            match = next((p for p in filtered_places if p.get('name', '').strip().lower() == place_name), None)
+            if match and 'latitude' in match and 'longitude' in match:
+                user_coords = (match['latitude'], match['longitude'])
+        if not user_coords:
         
-        # Prepare user data
+            user_coords = (filtered_places[0].get('latitude', 30.033333), filtered_places[0].get('longitude', 31.233334))
+
+        budget_map = {
+            "low": 0,
+            "average": 1,
+            "mid": 2,
+            "high": 2,
+            "expensive": 3
+        }
+        # coords check
+        for p in filtered_places:
+            if 'coords' not in p or not p['coords']:
+                lat = p.get('latitude')
+                lon = p.get('longitude')
+                if lat is not None and lon is not None:
+                    p['coords'] = (lat, lon)
+                else:
+                    p['coords'] = (0.0, 0.0)
+            # budget check
+            if 'budget' not in p or p['budget'] is None:
+                br = str(p.get('budget_range', '')).strip().lower()
+                p['budget'] = budget_map.get(br, 1)  # default to 1 (average)
+
+        # filtering by max_distance
+        filtered_places = [
+            p for p in filtered_places
+            if 'coords' in p and haversine(user_coords, p['coords']) <= max_distance
+        ]
+        if not filtered_places:
+            return jsonify({"success": False, "error": "No places found within the specified distance."}), 404
+
         user_data = {
             "preferences": preferences,
             "budget": user_budget,
-            "coords": tuple(user_coords)
+            "coords": user_coords
         }
-        
-        # Get recommendations using the actual ranking logic
+
         ranked_places = rank_places(
             user_data=user_data,
-            places_list=placeholder_places.copy(),
+            places_list=filtered_places.copy(),
             embedder=embedder,
             sentiment_analyzer=sentiment_analyzer,
-            predefined_attributes=predefined_attributes
+            predefined_attributes=predefined_attributes,
+            max_distance_km=max_distance
         )
-        
-        # Format response
+
         response = []
         for place in ranked_places:
             response.append({
                 "name": place["name"],
                 "address": place.get("address", "Unknown"),
-                "budget": place["budget"],
+                "budget": place.get("budget", place.get("avg_price_usd", 0)),
                 "scoring_details": place["scoring_details"]
             })
-        
         return jsonify({"success": True, "recommendations": response})
-        
     except Exception as e:
         print(f"Error in recommendation endpoint: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
